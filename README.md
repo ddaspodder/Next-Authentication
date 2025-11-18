@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Auth — Next.js Example
 
-## Getting Started
+Lightweight Next.js (App Router) example app demonstrating email/password sign-up and session handling with an encrypted session store backed by SQLite. Encrypted session payloads (JWE strings) are persisted in the `sessions` table (`session_data` column) of the local SQLite database.
 
-First, run the development server:
+This repository contains a minimal auth flow used for learning and small projects. It uses:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js (app directory)
+- better-sqlite3 for a simple local database (`src/lib/db.js`)
+- Node `crypto` + `jose` for encrypting session payloads (`src/lib/session.js`)
+- Server Actions for signup/login + cookie management (`src/lib/action.js`)
+
+Key files
+
+- `src/lib/db.js` — initializes SQLite schema (`users`, `sessions`, `trainings`).
+- `src/lib/hash.js` — password hashing and verification using Node `scrypt`.
+- `src/lib/user.js` — create user and lookup helpers.
+- `src/lib/session.js` — encrypt/decrypt session payloads and helpers to create/validate sessions.
+- `src/lib/action.js` — server actions: `signup`, `login`, `logout` that wire UI forms to the backend.
+- `src/components/auth-form.js` — basic sign-up / login form used by pages.
+- `src/components/logout.js` — logout form (Server Action wired via a client component).
+
+Setup
+
+1. Install dependencies
+
+```powershell
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Environment
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+Create a `.env.local` at the project root with these variables (example):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+SESSION_SECRET=change_this_to_a_long_random_string_at_least_32_chars
+SESSION_SALT=optional_app_salt_default_used_when_missing
+```
 
-## Learn More
+- `SESSION_SECRET` is required and used to derive the symmetric key for JWE session encryption.
+- `SESSION_SALT` is optional but recommended for key derivation/versioning.
 
-To learn more about Next.js, take a look at the following resources:
+3. Run the dev server
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```powershell
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+How it works
 
-## Deploy on Vercel
+- Sign-up: the Server Action `signup` calls `createUser` to hash the password and insert a user record, then creates a session. The session payload is encrypted with `jose` and stored in the `sessions` table; an HttpOnly cookie is set.
+- Login: `login` verifies the password and creates a session the same way.
+- Sessions: session payloads include `userId` and `expiresAt`. The app provides helpers to validate and refresh sessions. For security, cookie mutations (set/delete) are performed inside Server Actions or Route Handlers only.
+- Sessions: session payloads include `userId` and `expiresAt`. The encrypted session JWE is stored in the `sessions` table (column `session_data`) in the SQLite database; helpers are provided to validate and refresh sessions. For security, cookie mutations (set/delete) are performed inside Server Actions or Route Handlers only.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Notes & recommendations
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Passwords are hashed with Node `scrypt` (see `src/lib/hash.js`). You may switch to `argon2` for a modern KDF if desired.
+- The session storage uses JWE (via `jose`) to encrypt session payloads before storing them in the DB. Keep `SESSION_SECRET` safe and rotate carefully (rotating invalidates existing sessions).
+- Consider storing only a `sessionId` in the cookie and keeping session data server-side if you want smaller cookies.
+- The project includes a top-centered toast style (`#error-message-toast`) — see `src/app/globals.css`.
+
+Common troubleshooting
+
+- "Cookies can only be modified in a Server Action or Route Handler": ensure any `cookies().set()`/`cookies().delete()` calls are inside a Server Action (look for `"use server"`) or a route handler.
+- Server redirects (`redirect()`) throw a special control exception — do not silently catch it in your action's `try/catch` or rethrow it so Next can handle navigation.
+- If middleware/proxy is not triggering, ensure the file is named `middleware.js` at project root (or `src/middleware.js`) and exports `middleware`/`config.matcher`.
+
+Next steps you might want
+
+- Wire the session ID into the cookie (store `sessionId` only) and keep encrypted payload in DB.
+- Add scheduled cleanup for expired sessions.
+- Add tests for `hashPassword`, `verifyPassword`, and session encryption/decryption.
+
+License
+
+This example is provided as-is for learning purposes.
