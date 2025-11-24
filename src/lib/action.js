@@ -81,7 +81,6 @@ export async function validateSession() {
     if (Date.now() > expiresAt) {
       return null;
     }
-
     const session = await getSessionById(sessionId);
     if (!session) {
       return null;
@@ -130,6 +129,8 @@ export async function logout() {
     await deleteSession();
     redirect("/?mode=login");
   } catch (err) {
+    if (err && (err.digest || "").toString().includes("NEXT_REDIRECT"))
+      throw err;
     console.log("Error in logging out:", err);
     return {
       type: "error",

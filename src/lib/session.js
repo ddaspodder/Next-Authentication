@@ -105,7 +105,6 @@ export async function getSessionById(sessionId) {
 
 export async function deleteSession() {
   try {
-    throw new Error("Delete session not implemented");
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get("session");
     if (sessionCookie) {
